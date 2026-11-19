@@ -14,19 +14,20 @@ const cards = [...grid.querySelectorAll('[data-product]')];
 const search = $('#studio-search');
 const more = $('#studio-more');
 const filters = $$('[data-filter]');
-const viewSwitch = $('#studio-view-switch');
-const viewButtons = $$('[data-shop-view]');
 const swipeView = $('#studio-swipe');
 const deck = $('#studio-deck');
 const swipeCard = $('#studio-swipe-card');
 const swipePrevious = $('#studio-swipe-prev');
 const swipeNext = $('#studio-swipe-next');
-const narrowScreen = matchMedia('(max-width: 560px)');
+const narrowScreen = matchMedia('(max-width: 560px), (pointer: coarse) and (max-width: 950px) and (orientation: landscape)');
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 let filter = 'all', expanded = false, matchingCards = [], swipeIndex = 0;
-let shopView = narrowScreen.matches ? 'swipe' : 'grid', explicitView = false;
+let shopView = narrowScreen.matches ? 'swipe' : 'grid';
 let gesture = null, suppressSwipeClick = false;
+let deckFlight = null;
 
 function renderCollection() {
+  cancelDeckFlight();
   const words = searchable(search.value).trim().split(/\s+/).filter(Boolean);
   matchingCards = cards.filter(card => {
     const product = products.get(card.dataset.product);
@@ -38,7 +39,6 @@ function renderCollection() {
   const visible = new Set(showAll ? matchingCards : matchingCards.slice(0, 8));
   cards.forEach(card => { card.hidden = !visible.has(card); });
   filters.forEach(button => { button.setAttribute('aria-pressed', String(button.dataset.filter === filter)); });
-  viewButtons.forEach(button => { button.setAttribute('aria-pressed', String(button.dataset.shopView === shopView)); });
   grid.hidden = shopView !== 'grid';
   swipeView.hidden = shopView !== 'swipe';
   $('#studio-count').textContent = matchingCards.length ? shopView === 'swipe' ? `${matchingCards.length} selections to explore` : `Showing ${visible.size} of ${matchingCards.length} selections` : 'No selections found. Try another search or category.';
@@ -67,6 +67,7 @@ function renderDeck() {
   swipeCard.hidden = !product;
   swipePrevious.disabled = !product || swipeIndex === 0;
   swipeNext.disabled = !product || swipeIndex === matchingCards.length - 1;
+  updateDeckBusy();
   const image = $('#studio-swipe-image');
   if (!product) {
     image.removeAttribute('src');
@@ -85,10 +86,9 @@ function renderDeck() {
   swipeCard.setAttribute('aria-label', `View ${product.title}, ${price}`);
   $('#studio-swipe-position').textContent = `${swipeIndex + 1} of ${matchingCards.length} · ${product.title}`;
 }
-function changeView(view, explicit = false) {
+function changeView(view) {
   if (!['grid', 'swipe'].includes(view)) return;
   const active = document.activeElement;
-  if (explicit) explicitView = true;
   shopView = view;
   resetGesture();
   renderCollection();
@@ -96,21 +96,88 @@ function changeView(view, explicit = false) {
   if (view === 'swipe' && grid.contains(active)) deck.focus({ preventScroll: true });
   if (view === 'grid' && swipeView.contains(active)) (cards.find(card => !card.hidden) || search).focus({ preventScroll: true });
 }
-viewButtons.forEach(button => button.addEventListener('click', () => changeView(button.dataset.shopView, true)));
-narrowScreen.addEventListener('change', () => { if (!explicitView) changeView(narrowScreen.matches ? 'swipe' : 'grid'); });
-viewSwitch.hidden = false;
+narrowScreen.addEventListener('change', () => changeView(narrowScreen.matches ? 'swipe' : 'grid'));
 
-function moveDeck(step) {
-  swipeIndex = Math.max(0, Math.min(matchingCards.length - 1, swipeIndex + step));
-  renderDeck();
-  if (document.activeElement === swipePrevious && swipePrevious.disabled || document.activeElement === swipeNext && swipeNext.disabled) deck.focus({ preventScroll: true });
+function updateDeckBusy() {
+  deck.setAttribute('aria-busy', String(Boolean(deckFlight)));
+  swipeCard.setAttribute('aria-disabled', String(Boolean(deckFlight)));
+  swipePrevious.setAttribute('aria-disabled', String(Boolean(deckFlight) || swipePrevious.disabled));
+  swipeNext.setAttribute('aria-disabled', String(Boolean(deckFlight) || swipeNext.disabled));
 }
-swipePrevious.addEventListener('click', () => { resetGesture(); moveDeck(-1); });
-swipeNext.addEventListener('click', () => { resetGesture(); moveDeck(1); });
+function cancelDeckFlight() {
+  const previous = deckFlight;
+  if (!previous) return;
+  deckFlight = null;
+  previous.animations.forEach(animation => animation.cancel());
+  previous.clone.remove();
+  swipeCard.style.transition = previous.transition;
+  updateDeckBusy();
+}
+function outgoingCard() {
+  const clone = swipeCard.cloneNode(true);
+  for (const [id, className] of [['studio-swipe-category', 'swipe-card-category'], ['studio-swipe-name', 'swipe-card-name'], ['studio-swipe-price', 'swipe-card-price']]) clone.querySelector('#' + id)?.classList.add(className);
+  for (const element of [clone, ...clone.querySelectorAll('*')]) {
+    for (const attribute of ['id', 'aria-labelledby', 'aria-describedby', 'aria-controls', 'aria-activedescendant']) element.removeAttribute(attribute);
+    if (element.hasAttribute('tabindex')) element.tabIndex = -1;
+  }
+  clone.classList.remove('is-dragging');
+  clone.classList.add('studio-swipe-outgoing');
+  clone.setAttribute('aria-hidden', 'true');
+  clone.setAttribute('inert', '');
+  clone.tabIndex = -1;
+  clone.disabled = true;
+  clone.style.width = `${swipeCard.offsetWidth}px`;
+  clone.style.height = `${swipeCard.offsetHeight}px`;
+  clone.style.transition = 'none';
+  return clone;
+}
+function moveDeck(step) {
+  if (deckFlight || shopView !== 'swipe') return;
+  const active = document.activeElement;
+  const next = Math.max(0, Math.min(matchingCards.length - 1, swipeIndex + step));
+  if (!matchingCards.length || next === swipeIndex) { resetGesture(); return; }
+  if (gesture) suppressSwipeClick = true;
+  if (!reducedMotion.matches && typeof swipeCard.animate === 'function') {
+    const rect = swipeCard.getBoundingClientRect();
+    const start = getComputedStyle(swipeCard).transform;
+    const clone = outgoingCard();
+    const flight = { clone, animations: [], transition: swipeCard.style.transition };
+    deckFlight = flight;
+    // Cancel the drag's CSS snapback: the real next card stays still below the departing copy.
+    swipeCard.style.transition = 'none';
+    resetGesture();
+    clone.style.transform = start === 'none' ? 'translateX(0px) rotate(0deg)' : start;
+    deck.append(clone);
+    swipeIndex = next;
+    renderDeck();
+    const direction = step > 0 ? -1 : 1;
+    // Include card height so its rotated top corner also clears the viewport boundary.
+    const distance = window.innerWidth + rect.width + rect.height * .3;
+    try {
+      flight.animations.push(clone.animate([
+        { transform: clone.style.transform },
+        { transform: `translateX(${direction * distance}px) rotate(${direction * 16}deg)` },
+      ], { duration: 320, easing: 'cubic-bezier(.32,.05,.65,.35)', fill: 'forwards' }));
+      flight.animations.push(swipeCard.animate([{ transform: 'scale(.97)' }, { transform: 'scale(1)' }], { duration: 320, easing: 'cubic-bezier(.2,.7,.2,1)' }));
+      const finish = () => { if (deckFlight === flight) cancelDeckFlight(); };
+      Promise.all(flight.animations.map(animation => animation.finished)).then(finish, finish);
+    } catch {
+      // Also observe any animation already started before an unsupported operation failed.
+      flight.animations.forEach(animation => animation.finished.catch(() => {}));
+      cancelDeckFlight();
+    }
+  } else {
+    resetGesture();
+    swipeIndex = next;
+    renderDeck();
+  }
+  if (active === swipePrevious && swipePrevious.disabled || active === swipeNext && swipeNext.disabled) deck.focus({ preventScroll: true });
+}
+swipePrevious.addEventListener('click', () => moveDeck(-1));
+swipeNext.addEventListener('click', () => moveDeck(1));
 deck.addEventListener('keydown', event => {
   if (event.altKey || event.ctrlKey || event.metaKey || !['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
   event.preventDefault();
-  resetGesture();
   moveDeck(event.key === 'ArrowLeft' ? -1 : 1);
 });
 
@@ -125,6 +192,7 @@ function resetGesture(blockClick = false) {
 // Pointer capture keeps a horizontal drag coherent; touch-action leaves native vertical scroll and pinch zoom available.
 swipeCard.addEventListener('pointerdown', event => {
   if (shopView !== 'swipe' || !matchingCards.length || !event.isPrimary || event.button !== 0) return;
+  if (deckFlight) { suppressSwipeClick = true; return; }
   suppressSwipeClick = false;
   gesture = { id: event.pointerId, x: event.clientX, y: event.clientY, width: swipeCard.getBoundingClientRect().width, axis: null };
   swipeCard.setPointerCapture(event.pointerId);
@@ -146,7 +214,7 @@ swipeCard.addEventListener('pointermove', event => {
   const atEdge = dx > 0 && swipeIndex === 0 || dx < 0 && swipeIndex === matchingCards.length - 1;
   const offset = Math.max(-gesture.width * .85, Math.min(gesture.width * .85, dx)) * (atEdge ? .25 : 1);
   const rotation = Math.max(-10, Math.min(10, offset / Math.max(1, gesture.width) * 10));
-  swipeCard.style.transform = `translateX(${offset}px) rotate(${rotation}deg)`;
+  if (!reducedMotion.matches) swipeCard.style.transform = `translateX(${offset}px) rotate(${rotation}deg)`;
 });
 swipeCard.addEventListener('pointerup', event => {
   if (!gesture || event.pointerId !== gesture.id) return;
@@ -154,21 +222,26 @@ swipeCard.addEventListener('pointerup', event => {
   const threshold = Math.max(40, Math.min(60, gesture.width * .2));
   const completed = Math.abs(dx) >= threshold && Math.abs(dx) > Math.abs(dy) * 1.2;
   const moved = Math.max(Math.abs(dx), Math.abs(dy)) >= 10;
-  resetGesture(moved);
+  if (moved) suppressSwipeClick = true;
   if (completed) moveDeck(dx < 0 ? 1 : -1);
+  else resetGesture(moved);
 });
 swipeCard.addEventListener('pointercancel', event => { if (gesture?.id === event.pointerId) resetGesture(true); });
 swipeCard.addEventListener('lostpointercapture', event => { if (gesture?.id === event.pointerId) resetGesture(true); });
 swipeCard.addEventListener('dragstart', event => event.preventDefault());
 swipeCard.addEventListener('click', event => {
+  if (deckFlight) { event.preventDefault(); return; }
   if (suppressSwipeClick && event.detail !== 0) { suppressSwipeClick = false; event.preventDefault(); return; }
   suppressSwipeClick = false;
   const id = matchingCards[swipeIndex]?.dataset.product;
   if (id) openProduct(id, swipeCard);
 });
-window.addEventListener('blur', () => resetGesture(true));
-window.addEventListener('pagehide', () => resetGesture(true));
-document.addEventListener('visibilitychange', () => { if (document.hidden) resetGesture(true); });
+function cancelDeckActivity() { cancelDeckFlight(); resetGesture(true); }
+window.addEventListener('blur', cancelDeckActivity);
+window.addEventListener('pagehide', cancelDeckActivity);
+window.addEventListener('resize', cancelDeckActivity);
+reducedMotion.addEventListener('change', cancelDeckActivity);
+document.addEventListener('visibilitychange', () => { if (document.hidden) cancelDeckActivity(); });
 
 const productDialog = $('#studio-product');
 const bagDialog = $('#studio-bag');
