@@ -25,6 +25,7 @@ let filter = 'all', expanded = false, matchingCards = [], swipeIndex = 0;
 let shopView = narrowScreen.matches ? 'swipe' : 'grid';
 let gesture = null, suppressSwipeClick = false;
 let deckFlight = null;
+let viewportWidth = window.innerWidth;
 
 function renderCollection() {
   cancelDeckFlight();
@@ -194,7 +195,8 @@ swipeCard.addEventListener('pointerdown', event => {
   if (shopView !== 'swipe' || !matchingCards.length || !event.isPrimary || event.button !== 0) return;
   if (deckFlight) { suppressSwipeClick = true; return; }
   suppressSwipeClick = false;
-  gesture = { id: event.pointerId, x: event.clientX, y: event.clientY, width: swipeCard.getBoundingClientRect().width, axis: null };
+  const now = performance.now();
+  gesture = { id: event.pointerId, x: event.clientX, y: event.clientY, width: swipeCard.getBoundingClientRect().width, axis: null, startedAt: now, lastX: event.clientX, lastMovedAt: now };
   swipeCard.setPointerCapture(event.pointerId);
 });
 document.addEventListener('pointerdown', event => {
@@ -203,10 +205,12 @@ document.addEventListener('pointerdown', event => {
 swipeCard.addEventListener('pointermove', event => {
   if (!gesture || event.pointerId !== gesture.id) return;
   const dx = event.clientX - gesture.x, dy = event.clientY - gesture.y;
+  if (Math.abs(event.clientX - gesture.lastX) >= 1) gesture.lastMovedAt = performance.now();
+  gesture.lastX = event.clientX;
   if (!gesture.axis) {
-    if (Math.max(Math.abs(dx), Math.abs(dy)) < 10) return;
-    if (Math.abs(dy) >= Math.abs(dx)) { resetGesture(true); return; }
-    if (Math.abs(dx) < Math.abs(dy) * 1.2) return;
+    if (Math.abs(dy) >= 12 && Math.abs(dy) > Math.abs(dx) * 1.35) { resetGesture(true); return; }
+    // Let an initially diagonal thumb movement resolve before giving it to scrolling.
+    if (Math.abs(dx) < 6 || Math.abs(dx) <= Math.abs(dy) * 1.1) return;
     gesture.axis = 'horizontal';
     swipeCard.classList.add('is-dragging');
   }
@@ -219,9 +223,14 @@ swipeCard.addEventListener('pointermove', event => {
 swipeCard.addEventListener('pointerup', event => {
   if (!gesture || event.pointerId !== gesture.id) return;
   const dx = event.clientX - gesture.x, dy = event.clientY - gesture.y;
-  const threshold = Math.max(40, Math.min(60, gesture.width * .2));
-  const completed = Math.abs(dx) >= threshold && Math.abs(dx) > Math.abs(dy) * 1.2;
-  const moved = Math.max(Math.abs(dx), Math.abs(dy)) >= 10;
+  const now = performance.now(), elapsed = Math.max(1, now - gesture.startedAt);
+  if (Math.abs(event.clientX - gesture.lastX) >= 1) gesture.lastMovedAt = now;
+  const threshold = Math.max(28, Math.min(40, gesture.width * .1));
+  const horizontal = Math.abs(dx) > Math.abs(dy) * 1.1;
+  // A small flick needs speed and a fresh movement; a held short drag should snap back.
+  const flick = Math.abs(dx) >= 24 && elapsed <= 240 && Math.abs(dx) / elapsed >= .25 && now - gesture.lastMovedAt <= 80;
+  const completed = horizontal && (Math.abs(dx) >= threshold || flick);
+  const moved = gesture.axis === 'horizontal' || Math.max(Math.abs(dx), Math.abs(dy)) >= 10;
   if (moved) suppressSwipeClick = true;
   if (completed) moveDeck(dx < 0 ? 1 : -1);
   else resetGesture(moved);
@@ -239,7 +248,11 @@ swipeCard.addEventListener('click', event => {
 function cancelDeckActivity() { cancelDeckFlight(); resetGesture(true); }
 window.addEventListener('blur', cancelDeckActivity);
 window.addEventListener('pagehide', cancelDeckActivity);
-window.addEventListener('resize', cancelDeckActivity);
+window.addEventListener('resize', () => {
+  if (window.innerWidth === viewportWidth) return;
+  viewportWidth = window.innerWidth;
+  cancelDeckActivity();
+});
 reducedMotion.addEventListener('change', cancelDeckActivity);
 document.addEventListener('visibilitychange', () => { if (document.hidden) cancelDeckActivity(); });
 
