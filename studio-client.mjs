@@ -21,11 +21,13 @@ const swipePrevious = $('#studio-swipe-prev');
 const swipeNext = $('#studio-swipe-next');
 const narrowScreen = matchMedia('(max-width: 560px), (pointer: coarse) and (max-width: 950px) and (orientation: landscape)');
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+const touchInput = 'ontouchstart' in window;
 let filter = 'all', expanded = false, matchingCards = [], swipeIndex = 0;
 let shopView = narrowScreen.matches ? 'swipe' : 'grid';
 let gesture = null, suppressSwipeClick = false;
 let deckFlight = null;
 let viewportWidth = window.innerWidth;
+let activeTouches = 0, ignoreMouseUntil = 0;
 
 function renderCollection() {
   cancelDeckFlight();
@@ -188,25 +190,28 @@ function resetGesture(blockClick = false) {
   if (blockClick) suppressSwipeClick = true;
   swipeCard.classList.remove('is-dragging');
   swipeCard.style.removeProperty('transform');
-  if (previous && swipeCard.hasPointerCapture(previous.id)) swipeCard.releasePointerCapture(previous.id);
+  if (previous?.kind === 'pointer' && swipeCard.hasPointerCapture(previous.id)) swipeCard.releasePointerCapture(previous.id);
 }
-// Pointer capture keeps a horizontal drag coherent; touch-action leaves native vertical scroll and pinch zoom available.
-swipeCard.addEventListener('pointerdown', event => {
-  if (shopView !== 'swipe' || !matchingCards.length || !event.isPrimary || event.button !== 0) return;
+function beginGesture(kind, id, x, y) {
+  if (shopView !== 'swipe' || !matchingCards.length || gesture) return;
   if (deckFlight) { suppressSwipeClick = true; return; }
   suppressSwipeClick = false;
   const now = performance.now();
-  gesture = { id: event.pointerId, x: event.clientX, y: event.clientY, width: swipeCard.getBoundingClientRect().width, axis: null, startedAt: now, lastX: event.clientX, lastMovedAt: now };
-  swipeCard.setPointerCapture(event.pointerId);
-});
-document.addEventListener('pointerdown', event => {
-  if (gesture && event.pointerId !== gesture.id) resetGesture(true);
-}, { capture: true });
-swipeCard.addEventListener('pointermove', event => {
-  if (!gesture || event.pointerId !== gesture.id) return;
-  const dx = event.clientX - gesture.x, dy = event.clientY - gesture.y;
-  if (Math.abs(event.clientX - gesture.lastX) >= 1) gesture.lastMovedAt = performance.now();
-  gesture.lastX = event.clientX;
+  gesture = { kind, id, x, y, width: swipeCard.getBoundingClientRect().width, axis: null, direction: 0, directionX: x, samples: [{ x, y, time: now }] };
+  if (kind === 'pointer') swipeCard.setPointerCapture(id);
+}
+function sampleGesture(x, y) {
+  const now = performance.now();
+  if (Math.abs(x - gesture.directionX) >= 2) {
+    gesture.direction = Math.sign(x - gesture.directionX);
+    gesture.directionX = x;
+  }
+  gesture.samples.push({ x, y, time: now });
+  gesture.samples = gesture.samples.filter(sample => now - sample.time <= 100).slice(-32);
+}
+function updateGesture(x, y, event) {
+  const dx = x - gesture.x, dy = y - gesture.y;
+  sampleGesture(x, y);
   if (!gesture.axis) {
     if (Math.abs(dy) >= 12 && Math.abs(dy) > Math.abs(dx) * 1.35) { resetGesture(true); return; }
     // Let an initially diagonal thumb movement resolve before giving it to scrolling.
@@ -219,24 +224,81 @@ swipeCard.addEventListener('pointermove', event => {
   const offset = Math.max(-gesture.width * .85, Math.min(gesture.width * .85, dx)) * (atEdge ? .25 : 1);
   const rotation = Math.max(-10, Math.min(10, offset / Math.max(1, gesture.width) * 10));
   if (!reducedMotion.matches) swipeCard.style.transform = `translateX(${offset}px) rotate(${rotation}deg)`;
-});
-swipeCard.addEventListener('pointerup', event => {
-  if (!gesture || event.pointerId !== gesture.id) return;
-  const dx = event.clientX - gesture.x, dy = event.clientY - gesture.y;
-  const now = performance.now(), elapsed = Math.max(1, now - gesture.startedAt);
-  if (Math.abs(event.clientX - gesture.lastX) >= 1) gesture.lastMovedAt = now;
+}
+function endGesture(x, y, event) {
+  const dx = x - gesture.x, dy = y - gesture.y;
+  sampleGesture(x, y);
   const threshold = Math.max(28, Math.min(40, gesture.width * .1));
   const horizontal = Math.abs(dx) > Math.abs(dy) * 1.1;
-  // A small flick needs speed and a fresh movement; a held short drag should snap back.
-  const flick = Math.abs(dx) >= 24 && elapsed <= 240 && Math.abs(dx) / elapsed >= .25 && now - gesture.lastMovedAt <= 80;
+  const first = gesture.samples[0], last = gesture.samples.at(-1);
+  const recentX = last.x - first.x, recentY = last.y - first.y, elapsed = last.time - first.time;
+  // Measure the release motion, not time spent resting a finger. Require observed
+  // horizontal movement, meaningful recent travel and no opposite-direction finish.
+  const flick = gesture.axis === 'horizontal' && Math.abs(dx) >= 18 && Math.abs(recentX) >= 12 && elapsed > 0 && Math.abs(recentX) / elapsed >= .3 && Math.abs(recentX) > Math.abs(recentY) * 1.1 && recentX * dx > 0 && gesture.direction * dx > 0;
   const completed = horizontal && (Math.abs(dx) >= threshold || flick);
   const moved = gesture.axis === 'horizontal' || Math.max(Math.abs(dx), Math.abs(dy)) >= 10;
+  if (moved && gesture.kind === 'touch' && event.cancelable) event.preventDefault();
   if (moved) suppressSwipeClick = true;
   if (completed) moveDeck(dx < 0 ? 1 : -1);
   else resetGesture(moved);
+}
+
+// Touch Events claim only a clear horizontal single-finger gesture. Pointer touch
+// events are ignored on this path so Safari cannot start or cancel it a second time.
+if (touchInput) {
+  const noteTouches = event => {
+    activeTouches = event.touches.length;
+    ignoreMouseUntil = performance.now() + 800;
+    if (activeTouches > 1) resetGesture(true);
+  };
+  document.addEventListener('touchstart', event => {
+    noteTouches(event);
+    if (gesture?.kind === 'pointer') resetGesture(true);
+  }, { capture: true, passive: true });
+  document.addEventListener('touchmove', noteTouches, { capture: true, passive: true });
+  document.addEventListener('touchend', noteTouches, { capture: true, passive: true });
+  document.addEventListener('touchcancel', event => { noteTouches(event); if (gesture?.kind === 'touch') resetGesture(true); }, { capture: true, passive: true });
+  swipeCard.addEventListener('touchstart', event => {
+    if (event.touches.length !== 1) return;
+    const touch = event.touches[0];
+    beginGesture('touch', touch.identifier, touch.clientX, touch.clientY);
+  }, { passive: true });
+  swipeCard.addEventListener('touchmove', event => {
+    if (event.touches.length !== 1) { resetGesture(true); return; }
+    if (gesture?.kind !== 'touch') return;
+    const touch = Array.from(event.touches).find(touch => touch.identifier === gesture.id);
+    if (touch) updateGesture(touch.clientX, touch.clientY, event);
+  }, { passive: false });
+  swipeCard.addEventListener('touchend', event => {
+    if (gesture?.kind !== 'touch') return;
+    if (event.touches.length) { resetGesture(true); return; }
+    const touch = Array.from(event.changedTouches).find(touch => touch.identifier === gesture.id);
+    if (touch) endGesture(touch.clientX, touch.clientY, event);
+  }, { passive: false });
+}
+function ignorePointer(event) {
+  if (touchInput && (event.pointerType === 'touch' || activeTouches > 0)) return true;
+  return (!event.pointerType || event.pointerType === 'mouse') && (performance.now() < ignoreMouseUntil || event.sourceCapabilities?.firesTouchEvents);
+}
+swipeCard.addEventListener('pointerdown', event => {
+  if (ignorePointer(event) || !event.isPrimary || event.button !== 0) return;
+  beginGesture('pointer', event.pointerId, event.clientX, event.clientY);
 });
-swipeCard.addEventListener('pointercancel', event => { if (gesture?.id === event.pointerId) resetGesture(true); });
-swipeCard.addEventListener('lostpointercapture', event => { if (gesture?.id === event.pointerId) resetGesture(true); });
+document.addEventListener('pointerdown', event => {
+  if (ignorePointer(event)) return;
+  if (gesture && (gesture.kind !== 'pointer' || event.pointerId !== gesture.id)) resetGesture(true);
+}, { capture: true });
+swipeCard.addEventListener('pointermove', event => {
+  if (ignorePointer(event) || gesture?.kind !== 'pointer' || event.pointerId !== gesture.id) return;
+  updateGesture(event.clientX, event.clientY, event);
+});
+swipeCard.addEventListener('pointerup', event => {
+  if (ignorePointer(event) || gesture?.kind !== 'pointer' || event.pointerId !== gesture.id) return;
+  endGesture(event.clientX, event.clientY, event);
+});
+const cancelPointer = event => { if (!ignorePointer(event) && gesture?.kind === 'pointer' && gesture.id === event.pointerId) resetGesture(true); };
+swipeCard.addEventListener('pointercancel', cancelPointer);
+swipeCard.addEventListener('lostpointercapture', cancelPointer);
 swipeCard.addEventListener('dragstart', event => event.preventDefault());
 swipeCard.addEventListener('click', event => {
   if (deckFlight) { event.preventDefault(); return; }
