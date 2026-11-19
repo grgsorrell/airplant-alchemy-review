@@ -14,31 +14,161 @@ const cards = [...grid.querySelectorAll('[data-product]')];
 const search = $('#studio-search');
 const more = $('#studio-more');
 const filters = $$('[data-filter]');
-let filter = 'all', expanded = false;
+const viewSwitch = $('#studio-view-switch');
+const viewButtons = $$('[data-shop-view]');
+const swipeView = $('#studio-swipe');
+const deck = $('#studio-deck');
+const swipeCard = $('#studio-swipe-card');
+const swipePrevious = $('#studio-swipe-prev');
+const swipeNext = $('#studio-swipe-next');
+const narrowScreen = matchMedia('(max-width: 560px)');
+let filter = 'all', expanded = false, matchingCards = [], swipeIndex = 0;
+let shopView = narrowScreen.matches ? 'swipe' : 'grid', explicitView = false;
+let gesture = null, suppressSwipeClick = false;
 
 function renderCollection() {
   const words = searchable(search.value).trim().split(/\s+/).filter(Boolean);
-  const matching = cards.filter(card => {
+  matchingCards = cards.filter(card => {
     const product = products.get(card.dataset.product);
     if (!product) return false;
     const text = searchable([product.title, product.description, product.category, product.group, ...product.variants.map(variant => variant.title)].join(' '));
     return (filter === 'all' || (product.group || card.dataset.group) === filter) && words.every(word => text.includes(word));
   });
   const showAll = expanded || filter !== 'all' || words.length > 0;
-  const visible = new Set(showAll ? matching : matching.slice(0, 8));
+  const visible = new Set(showAll ? matchingCards : matchingCards.slice(0, 8));
   cards.forEach(card => { card.hidden = !visible.has(card); });
   filters.forEach(button => { button.setAttribute('aria-pressed', String(button.dataset.filter === filter)); });
-  $('#studio-count').textContent = matching.length ? `Showing ${visible.size} of ${matching.length} selections` : 'No selections found. Try another search or category.';
-  more.hidden = showAll || matching.length <= 8;
+  viewButtons.forEach(button => { button.setAttribute('aria-pressed', String(button.dataset.shopView === shopView)); });
+  grid.hidden = shopView !== 'grid';
+  swipeView.hidden = shopView !== 'swipe';
+  $('#studio-count').textContent = matchingCards.length ? shopView === 'swipe' ? `${matchingCards.length} selections to explore` : `Showing ${visible.size} of ${matchingCards.length} selections` : 'No selections found. Try another search or category.';
+  more.hidden = shopView === 'swipe' || showAll || matchingCards.length <= 8;
+  renderDeck();
 }
-search.addEventListener('input', () => { expanded = false; renderCollection(); });
-filters.forEach(button => button.addEventListener('click', () => { filter = button.dataset.filter; expanded = false; renderCollection(); }));
+function resetCollection() {
+  expanded = false;
+  swipeIndex = 0;
+  resetGesture();
+  renderCollection();
+}
+search.addEventListener('input', resetCollection);
+filters.forEach(button => button.addEventListener('click', () => { filter = button.dataset.filter; resetCollection(); }));
 more.addEventListener('click', () => {
   const nextCard = cards.find(card => card.hidden);
   expanded = true;
   renderCollection();
   if (nextCard && !nextCard.hidden) nextCard.focus();
 });
+
+function renderDeck() {
+  swipeIndex = Math.max(0, Math.min(swipeIndex, matchingCards.length - 1));
+  const product = products.get(matchingCards[swipeIndex]?.dataset.product);
+  deck.hidden = !product;
+  swipeCard.hidden = !product;
+  swipePrevious.disabled = !product || swipeIndex === 0;
+  swipeNext.disabled = !product || swipeIndex === matchingCards.length - 1;
+  const image = $('#studio-swipe-image');
+  if (!product) {
+    image.removeAttribute('src');
+    $('#studio-swipe-position').textContent = 'No matching plants. Try another search or category.';
+    return;
+  }
+  const photo = product.images?.[0];
+  image.hidden = !photo;
+  if (photo) { image.src = photo.url; image.alt = photo.alt || product.title; }
+  else image.removeAttribute('src');
+  const prices = product.variants.map(variant => variant.priceMinor).filter(price => Number.isSafeInteger(price));
+  const price = prices.length ? `${new Set(prices).size > 1 ? 'From ' : ''}${money(Math.min(...prices))}` : 'Price pending';
+  $('#studio-swipe-name').textContent = product.title;
+  $('#studio-swipe-price').textContent = price;
+  $('#studio-swipe-category').textContent = product.category || '';
+  swipeCard.setAttribute('aria-label', `View ${product.title}, ${price}`);
+  $('#studio-swipe-position').textContent = `${swipeIndex + 1} of ${matchingCards.length} · ${product.title}`;
+}
+function changeView(view, explicit = false) {
+  if (!['grid', 'swipe'].includes(view)) return;
+  const active = document.activeElement;
+  if (explicit) explicitView = true;
+  shopView = view;
+  resetGesture();
+  renderCollection();
+  // An automatic breakpoint change must not leave keyboard focus in a hidden view.
+  if (view === 'swipe' && grid.contains(active)) deck.focus({ preventScroll: true });
+  if (view === 'grid' && swipeView.contains(active)) (cards.find(card => !card.hidden) || search).focus({ preventScroll: true });
+}
+viewButtons.forEach(button => button.addEventListener('click', () => changeView(button.dataset.shopView, true)));
+narrowScreen.addEventListener('change', () => { if (!explicitView) changeView(narrowScreen.matches ? 'swipe' : 'grid'); });
+viewSwitch.hidden = false;
+
+function moveDeck(step) {
+  swipeIndex = Math.max(0, Math.min(matchingCards.length - 1, swipeIndex + step));
+  renderDeck();
+  if (document.activeElement === swipePrevious && swipePrevious.disabled || document.activeElement === swipeNext && swipeNext.disabled) deck.focus({ preventScroll: true });
+}
+swipePrevious.addEventListener('click', () => { resetGesture(); moveDeck(-1); });
+swipeNext.addEventListener('click', () => { resetGesture(); moveDeck(1); });
+deck.addEventListener('keydown', event => {
+  if (event.altKey || event.ctrlKey || event.metaKey || !['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+  event.preventDefault();
+  resetGesture();
+  moveDeck(event.key === 'ArrowLeft' ? -1 : 1);
+});
+
+function resetGesture(blockClick = false) {
+  const previous = gesture;
+  gesture = null;
+  if (blockClick) suppressSwipeClick = true;
+  swipeCard.classList.remove('is-dragging');
+  swipeCard.style.removeProperty('transform');
+  if (previous && swipeCard.hasPointerCapture(previous.id)) swipeCard.releasePointerCapture(previous.id);
+}
+// Pointer capture keeps a horizontal drag coherent; touch-action leaves native vertical scroll and pinch zoom available.
+swipeCard.addEventListener('pointerdown', event => {
+  if (shopView !== 'swipe' || !matchingCards.length || !event.isPrimary || event.button !== 0) return;
+  suppressSwipeClick = false;
+  gesture = { id: event.pointerId, x: event.clientX, y: event.clientY, width: swipeCard.getBoundingClientRect().width, axis: null };
+  swipeCard.setPointerCapture(event.pointerId);
+});
+document.addEventListener('pointerdown', event => {
+  if (gesture && event.pointerId !== gesture.id) resetGesture(true);
+}, { capture: true });
+swipeCard.addEventListener('pointermove', event => {
+  if (!gesture || event.pointerId !== gesture.id) return;
+  const dx = event.clientX - gesture.x, dy = event.clientY - gesture.y;
+  if (!gesture.axis) {
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < 10) return;
+    if (Math.abs(dy) >= Math.abs(dx)) { resetGesture(true); return; }
+    if (Math.abs(dx) < Math.abs(dy) * 1.2) return;
+    gesture.axis = 'horizontal';
+    swipeCard.classList.add('is-dragging');
+  }
+  if (event.cancelable) event.preventDefault();
+  const atEdge = dx > 0 && swipeIndex === 0 || dx < 0 && swipeIndex === matchingCards.length - 1;
+  const offset = Math.max(-gesture.width * .85, Math.min(gesture.width * .85, dx)) * (atEdge ? .25 : 1);
+  const rotation = Math.max(-10, Math.min(10, offset / Math.max(1, gesture.width) * 10));
+  swipeCard.style.transform = `translateX(${offset}px) rotate(${rotation}deg)`;
+});
+swipeCard.addEventListener('pointerup', event => {
+  if (!gesture || event.pointerId !== gesture.id) return;
+  const dx = event.clientX - gesture.x, dy = event.clientY - gesture.y;
+  const threshold = Math.max(40, Math.min(60, gesture.width * .2));
+  const completed = Math.abs(dx) >= threshold && Math.abs(dx) > Math.abs(dy) * 1.2;
+  const moved = Math.max(Math.abs(dx), Math.abs(dy)) >= 10;
+  resetGesture(moved);
+  if (completed) moveDeck(dx < 0 ? 1 : -1);
+});
+swipeCard.addEventListener('pointercancel', event => { if (gesture?.id === event.pointerId) resetGesture(true); });
+swipeCard.addEventListener('lostpointercapture', event => { if (gesture?.id === event.pointerId) resetGesture(true); });
+swipeCard.addEventListener('dragstart', event => event.preventDefault());
+swipeCard.addEventListener('click', event => {
+  if (suppressSwipeClick && event.detail !== 0) { suppressSwipeClick = false; event.preventDefault(); return; }
+  suppressSwipeClick = false;
+  const id = matchingCards[swipeIndex]?.dataset.product;
+  if (id) openProduct(id, swipeCard);
+});
+window.addEventListener('blur', () => resetGesture(true));
+window.addEventListener('pagehide', () => resetGesture(true));
+document.addEventListener('visibilitychange', () => { if (document.hidden) resetGesture(true); });
 
 const productDialog = $('#studio-product');
 const bagDialog = $('#studio-bag');
@@ -63,7 +193,8 @@ function closeMenu() {
 }
 function restoreFocus(element) {
   const visible = target => target?.isConnected && !target.closest('[hidden], [inert]') && target.getClientRects().length > 0;
-  const target = visible(element) ? element : $('#studio-menu-toggle');
+  const candidates = [element, shopView === 'swipe' ? swipeCard : cards.find(card => !card.hidden), search, $('#studio-menu-toggle')];
+  const target = candidates.find(visible);
   if (visible(target)) target.focus({ preventScroll: true });
 }
 productDialog.addEventListener('close', () => { if (!bagDialog.open) restoreFocus(productOpener); });
@@ -126,6 +257,7 @@ function openProduct(id, opener) {
   thumbnails.hidden = (product.images?.length || 0) < 2;
   selectPhoto(0);
   if (!productDialog.open) productDialog.showModal();
+  productDialog.scrollTop = 0;
   productTitle.focus({ preventScroll: true });
 }
 cards.forEach(card => card.addEventListener('click', () => openProduct(card.dataset.product, card)));
@@ -212,6 +344,7 @@ $$('[data-open-cart]').forEach(button => button.addEventListener('click', () => 
   if (productDialog.open) productDialog.close();
   renderBag();
   if (!bagDialog.open) bagDialog.showModal();
+  bagDialog.scrollTop = 0;
   bagTitle.focus({ preventScroll: true });
 }));
 function refreshBag() {
