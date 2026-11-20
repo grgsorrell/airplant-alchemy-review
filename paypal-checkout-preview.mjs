@@ -23,9 +23,9 @@ function render() {
     }
     $('paypal-lines').replaceChildren(...rows);
     $('paypal-subtotal').textContent = money(quote.subtotalMinor);
-    $('paypal-total').textContent = money(quote.subtotalMinor);
+    $('paypal-total').textContent = 'Pending tax';
     $('paypal-shipping').textContent = money(0);
-    $('paypal-tax').textContent = money(0);
+    $('paypal-tax').textContent = 'Not calculated';
     $('paypal-status').textContent = 'Checkout preview only. No payment or order can be submitted here.';
     $('paypal-error').textContent = '';
   } catch {
