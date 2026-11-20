@@ -298,7 +298,7 @@ body[data-phase="rise"] #direction-note,body[data-phase="bloom"] #direction-note
  <div class="vignette" aria-hidden="true"></div>
 </div>
 <header class="site-header">
- <a class="brand" href="#journey" aria-label="Airplant Alchemy, back to the forest">
+ <a class="brand" href="/airplant-alchemy-review/s/airplant/studio/" aria-label="Air Plant Alchemy home">
   <svg viewBox="0 0 60 66" fill="none" aria-hidden="true"><path d="M30 3 55 32 30 61 5 32 30 3Z"/><path d="M30 55V16M30 46C14 42 13 30 12 24c14 1 19 12 18 22Zm0-5c15-5 18-13 18-21-11 3-17 11-18 21ZM30 31C24 24 24 14 30 7c7 8 7 17 0 24Z"/></svg>
   <span>AIRPLANT ALCHEMY<small>WHOLESALE · A LIVING COLLECTION</small></span>
  </a>
@@ -1222,7 +1222,7 @@ function route(){
 }
 $('#back-journey').addEventListener('click',()=>{history.pushState(null,'','#journey');setCatalog(false);});
 $$('a[href="#plants"]').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();if(!catalog){history.pushState(null,'','#plants');setCatalog(true);}}));
-$('.brand').addEventListener('click',e=>{e.preventDefault();history.pushState(null,'','#journey');if(catalog)setCatalog(false);gotoY(0);});
+
 $('#search').addEventListener('input',renderCatalog);
 $('#catalog-sort').addEventListener('change',renderCatalog);
 $$('[data-filter]').forEach(b=>b.addEventListener('click',()=>{filter=b.dataset.filter;$$('[data-filter]').forEach(x=>{x.classList.toggle('selected',x===b);x.setAttribute('aria-pressed',String(x===b));});renderCatalog();}));
