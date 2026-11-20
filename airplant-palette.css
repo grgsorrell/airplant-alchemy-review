@@ -1,0 +1,246 @@
+/* Studio colors for Air Plant Alchemy's preserved forest renderer.
+   Loaded after the source styles. No image, camera, motion or layout changes. */
+.airplant-shell {
+  --ap-paper: #f7f5ee;
+  --ap-ink: #193d30;
+  --ap-muted: #637269;
+  --ap-line: #d4d9cd;
+  --ap-coral: #b84e3e;
+  --ap-pink: #f1d5c9;
+  --ap-lime: #dbe8a6;
+  --cream: var(--ap-paper);
+  --gold: var(--ap-lime);
+  color: var(--ap-paper);
+}
+
+/* The separate shared bag receives these values only for Air Plant Alchemy.
+   Important is needed because its renderer supplies the old tokens inline. */
+body[data-storefront="airplant"]:not(.airplant-shell) {
+  --bg: #f7f5ee !important;
+  --fg: #193d30 !important;
+  --accent: #b84e3e !important;
+  color-scheme: light;
+}
+
+/* Navigation and controls are quiet, light surfaces above the forest. */
+.airplant-shell .site-header {
+  background: var(--ap-paper);
+  color: var(--ap-ink);
+  box-shadow: 0 1px 0 var(--ap-line);
+}
+.airplant-shell .brand svg { stroke: var(--ap-ink); }
+.airplant-shell .brand small,
+.airplant-shell .header-caption,
+.airplant-shell .store-hours { color: var(--ap-muted); }
+.airplant-shell .header-caption i,
+.airplant-shell .control-right > i {
+  background: var(--ap-coral);
+  box-shadow: none;
+}
+.airplant-shell .top-nav {
+  background: var(--ap-paper);
+  border-color: var(--ap-line);
+  color: var(--ap-ink);
+}
+.airplant-shell .top-nav a,
+.airplant-shell .top-nav button,
+.airplant-shell .top-nav a[data-cart-count] { border-color: var(--ap-line); }
+.airplant-shell .top-nav span { color: var(--ap-ink); }
+.airplant-shell .top-nav a:hover,
+.airplant-shell .top-nav button:hover { color: var(--ap-coral); }
+.airplant-shell .journey-controls {
+  background: var(--ap-paper);
+  color: var(--ap-ink);
+  box-shadow: 0 0 0 10px var(--ap-paper);
+}
+.airplant-shell .control-right,
+.airplant-shell .preview-label,
+.airplant-shell .scrubber > label,
+.airplant-shell .scrubber > span { color: var(--ap-muted); }
+.airplant-shell .control-divider { background: var(--ap-line); }
+.airplant-shell #effects-button[aria-pressed="true"] { color: var(--ap-coral); }
+.airplant-shell .scrubber input {
+  background: linear-gradient(to right, var(--ap-coral) var(--fill, 0%), var(--ap-line) var(--fill, 0%));
+}
+.airplant-shell .scrubber input::-webkit-slider-thumb { background: var(--ap-coral); }
+.airplant-shell .scrubber input::-moz-range-thumb { background: var(--ap-coral); }
+.airplant-shell .forest-demo,
+.airplant-shell .forest-glimpse-replay {
+  background: var(--ap-paper);
+  color: var(--ap-ink);
+  border-color: var(--ap-line);
+}
+.airplant-shell .skip-link { background: var(--ap-paper); color: var(--ap-ink); }
+
+/* Browsing keeps its existing grid, artwork and image treatment. */
+.airplant-shell .catalog,
+.airplant-shell dialog {
+  color-scheme: light;
+  background: var(--ap-paper);
+  color: var(--ap-ink);
+  border-color: var(--ap-line);
+}
+.airplant-shell .catalog { scrollbar-color: var(--ap-muted) var(--ap-paper); }
+.airplant-shell .catalog .eyebrow,
+.airplant-shell .detail-copy .eyebrow,
+.airplant-shell .edit-heading > .eyebrow,
+.airplant-shell .edit-card .eyebrow { color: var(--ap-coral); }
+.airplant-shell .catalog-heading p,
+.airplant-shell .catalog-index,
+.airplant-shell .catalog-sizes,
+.airplant-shell .card-meta,
+.airplant-shell .catalog-footer,
+.airplant-shell .filters button,
+.airplant-shell .search span { color: var(--ap-muted); }
+.airplant-shell .catalog-tools,
+.airplant-shell .catalog-footer,
+.airplant-shell .search,
+.airplant-shell .search input,
+.airplant-shell .catalog-card .image { border-color: var(--ap-line); }
+.airplant-shell .filters button:hover { background: var(--ap-pink); color: var(--ap-ink); }
+.airplant-shell .filters button.selected { background: var(--ap-ink); color: var(--ap-paper); }
+.airplant-shell .search input { color: var(--ap-ink); }
+.airplant-shell .search input::placeholder { color: var(--ap-muted); }
+.airplant-shell .catalog-sort select {
+  background: var(--ap-paper);
+  color: var(--ap-ink);
+  border-color: var(--ap-line);
+  color-scheme: light;
+}
+.airplant-shell .catalog .outline-button { border-color: var(--ap-ink); }
+.airplant-shell .catalog .outline-button:hover { background: var(--ap-ink); color: var(--ap-paper); }
+.airplant-shell .catalog-card .image .catalog-discover {
+  background: var(--ap-paper);
+  color: var(--ap-ink);
+  border-color: var(--ap-line);
+}
+.airplant-shell .catalog-card .image > span:first-of-type { color: var(--ap-paper); }
+
+/* Product details, options and original-photo controls share Studio's palette. */
+.airplant-shell dialog::backdrop { background: #193d30c9; }
+.airplant-shell .dialog-close {
+  background: var(--ap-paper);
+  color: var(--ap-ink);
+  border-color: var(--ap-line);
+}
+.airplant-shell .dialog-close:hover { background: var(--ap-pink); }
+.airplant-shell .detail-copy > p,
+.airplant-shell .detail-copy .detail-art-note,
+.airplant-shell #detail-price-prefix,
+.airplant-shell #detail-price-status,
+.airplant-shell .quantity-control,
+.airplant-shell .detail-sizes legend,
+.airplant-shell .gallery-label,
+.airplant-shell .detail-pagination,
+.airplant-shell .edit-heading p,
+.airplant-shell .edit-disclosure,
+.airplant-shell #setup-dialog > p,
+.airplant-shell .setup-specials,
+.airplant-shell .setup-row label,
+.airplant-shell .setup-gallery small { color: var(--ap-muted); }
+.airplant-shell .detail-copy .disclosure,
+.airplant-shell .detail-copy .inline-status { color: var(--ap-muted) !important; }
+.airplant-shell .detail-price,
+.airplant-shell .detail-order-layout.with-gallery,
+.airplant-shell .detail-pagination,
+.airplant-shell .edit-card,
+.airplant-shell .setup-gallery { border-color: var(--ap-line); }
+.airplant-shell .quantity-control input,
+.airplant-shell #setup-dialog input:not([type="file"]),
+.airplant-shell #setup-dialog textarea {
+  color-scheme: light;
+  background: var(--ap-paper);
+  color: var(--ap-ink);
+  border-color: var(--ap-line);
+}
+.airplant-shell .buy-button { background: var(--ap-ink); color: var(--ap-paper); }
+.airplant-shell .buy-button:hover { background: #2d5743; }
+.airplant-shell .size-option-text,
+.airplant-shell .detail-copy .detail-fixed-size {
+  background: var(--ap-paper);
+  color: var(--ap-ink);
+  border-color: var(--ap-line);
+}
+.airplant-shell .size-option-text small { color: var(--ap-muted); }
+.airplant-shell .size-option:hover .size-option-text { border-color: var(--ap-coral); }
+.airplant-shell .size-option input:checked + .size-option-text {
+  background: var(--ap-lime);
+  border-color: var(--ap-ink);
+  color: var(--ap-ink);
+}
+.airplant-shell .size-option input:checked + .size-option-text small { color: var(--ap-ink); }
+.airplant-shell .return-forest,
+.airplant-shell .return-catalog,
+.airplant-shell dialog .text-link,
+.airplant-shell .edit-card-link { color: var(--ap-ink); border-color: var(--ap-line); }
+.airplant-shell .return-forest:hover,
+.airplant-shell .return-catalog:hover,
+.airplant-shell dialog .text-link:hover { color: var(--ap-coral); border-color: var(--ap-coral); }
+.airplant-shell .detail-image,
+.airplant-shell #detail-dialog.has-gallery .detail-image,
+.airplant-shell #detail-dialog.has-gallery .detail-image[data-photo-kind="original"] { background: #e7eadf; }
+.airplant-shell .detail-image > span { background: #f7f5eef2; color: var(--ap-ink); text-shadow: none; }
+.airplant-shell .photo-switch,
+.airplant-shell .gallery-navigation,
+.airplant-shell #photo-status {
+  background: #f7f5eef2;
+  color: var(--ap-ink);
+  border-color: var(--ap-line);
+}
+.airplant-shell .photo-switch button,
+.airplant-shell .gallery-navigation button { color: var(--ap-ink); }
+.airplant-shell .photo-switch button[aria-pressed="true"],
+.airplant-shell .gallery-navigation button:hover { background: var(--ap-lime); color: var(--ap-ink); }
+.airplant-shell .gallery-thumb { background: var(--ap-paper); border-color: var(--ap-line); }
+.airplant-shell .gallery-thumb:hover { background: var(--ap-pink); border-color: var(--ap-coral); }
+.airplant-shell .gallery-thumb[aria-pressed="true"] {
+  background: var(--ap-lime);
+  border-color: var(--ap-coral);
+  box-shadow: 0 0 0 2px #b84e3e22;
+}
+.airplant-shell .gallery-thumb .thumb-number { background: var(--ap-ink); color: var(--ap-paper); }
+.airplant-shell .catalog-source-note,
+.airplant-shell .setup-row,
+.airplant-shell .edit-art { background: #e7eadf; border-color: var(--ap-line); color: var(--ap-ink); }
+.airplant-shell .setup-row label,
+.airplant-shell .setup-row .setup-gallery small { color: var(--ap-ink); }
+.airplant-shell .catalog-source-note summary { color: var(--ap-ink); }
+
+/* Light typography stays on the dark forest and its glass portrait windows. */
+.airplant-shell .story-panel,
+.airplant-shell #climb-title,
+.airplant-shell #collection-readout,
+.airplant-shell #direction-note,
+.airplant-shell #bloom-note,
+.airplant-shell .portrait-caption,
+.airplant-shell #finale-card { color: var(--ap-paper); }
+.airplant-shell .story-panel p,
+.airplant-shell #finale-card > p,
+.airplant-shell .finale-bottom,
+.airplant-shell .finale-disclosure { color: #e0e5d7; }
+.airplant-shell #finale-card .inline-status { color: #e0e5d7 !important; }
+.airplant-shell .story-panel h1 em,
+.airplant-shell .story-panel h2 em,
+.airplant-shell #finale-title em,
+.airplant-shell .finale-kicker,
+.airplant-shell .portrait-sub,
+.airplant-shell #pollen-tip { color: var(--ap-lime); }
+.airplant-shell .story-panel .text-link:hover,
+.airplant-shell #bloom-note .text-link:hover,
+.airplant-shell .finale-link:hover { color: var(--ap-lime); border-color: var(--ap-lime); }
+.airplant-shell .portrait-window:hover .portrait-arrow,
+.airplant-shell .portrait-window:focus-visible .portrait-arrow { background: var(--ap-lime); color: var(--ap-ink); border-color: var(--ap-lime); }
+.airplant-shell .chapter-nav button.active > i,
+.airplant-shell #product-dots .active i,
+.airplant-shell .finale-kicker > i { background: var(--ap-lime); border-color: var(--ap-lime); box-shadow: 0 0 10px #dbe8a64d; }
+.airplant-shell #load-cover { background: var(--ap-paper); color: var(--ap-ink); }
+.airplant-shell #load-cover > small { color: var(--ap-muted); }
+.airplant-shell #load-cover > i { background: linear-gradient(90deg, transparent, var(--ap-coral), transparent); }
+
+/* Coral focus on light surfaces; lime focus for controls over forest imagery. */
+.airplant-shell :is(button, a, input, select, textarea):focus-visible { outline-color: var(--ap-lime); }
+.airplant-shell :is(.site-header, .journey-controls, .catalog, dialog) :is(button, a, input, select, textarea):focus-visible,
+.airplant-shell .forest-glimpse-replay:focus-visible,
+.airplant-shell .size-option input:focus-visible + .size-option-text { outline-color: var(--ap-coral); }
+body[data-storefront="airplant"]:not(.airplant-shell) :is(a, button, input, select):focus-visible { outline-color: #b84e3e; }
+body[data-storefront="airplant"] #airplant-checkout-link[hidden] { display: none; }

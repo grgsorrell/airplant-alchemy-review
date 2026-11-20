@@ -83,9 +83,12 @@ function startReview() {
     const container = $('#cart-content');
     if (!container) return;
     const errorElement = $('#cart-error');
+    const checkout = $('#airplant-checkout-link');
+    if (checkout) checkout.hidden = true;
     errorElement.textContent = '';
     if (!lines.length) { container.textContent = 'Your review bag is empty.'; return; }
     const quote = quoteReviewCart(lines, catalog);
+    if (checkout) checkout.hidden = quote.subtotalMinor === null;
     container.innerHTML = quote.lines.map(line => `<article class="cart-row"><div><h2><a href="${storePath}products/${encodeURIComponent(line.productId)}/?variant=${encodeURIComponent(line.variantId)}">${esc(line.title)}</a></h2><p>${esc(line.variantTitle)} · ${line.unitPriceMinor === null ? 'Price pending' : money(line.unitPriceMinor) + ' each (preview)'}</p></div><label>Quantity<input type="number" min="1" max="20" value="${line.quantity}" data-product="${esc(line.productId)}" data-variant="${esc(line.variantId)}"></label><strong>${line.lineTotalMinor === null ? 'Price pending' : money(line.lineTotalMinor)}</strong><button class="remove" data-remove="${esc(line.productId)}" data-variant="${esc(line.variantId)}">Remove</button></article>`).join('') + `<p class="total">Preview subtotal <span>${quote.subtotalMinor === null ? 'Price pending' : money(quote.subtotalMinor)}</span></p><p class="fine">Prices and availability need Brian’s confirmation. This bag stays in your browser; it is not an order.</p>`;
     container.querySelectorAll('[data-product]').forEach(input => input.addEventListener('change', () => {
       if (!input.reportValidity()) return;
